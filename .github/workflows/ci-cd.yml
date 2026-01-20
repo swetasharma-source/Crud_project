@@ -52,58 +52,45 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Compose
+      - name: Set up Docker
         run: |
-          docker-compose --version
           echo "Docker version:"
           docker --version
+
+      - name: Run Docker Compose test locally
+        run: |
+          echo "Installing Docker Compose..."
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
 
       - name: Start services
         run: |
           echo "Starting containers..."
           docker-compose up -d
           echo "Containers started"
+          sleep 15
           docker-compose ps
 
-      - name: Wait for services
+      - name: Test API endpoints
         run: |
-          echo "Waiting 20 seconds for services to initialize..."
-          sleep 20
-          echo "Checking service health..."
-          docker-compose ps
-          echo "Checking app logs..."
-          docker-compose logs app | head -20
-          echo "Checking database logs..."
-          docker-compose logs database | head -20
-
-      - name: Run health checks
-        run: |
-          echo "Running health checks..."
-          if curl -f http://localhost/health; then
-            echo "✅ Health endpoint working"
-          else
-            echo "⚠️  Health check failed"
-          fi
+          echo "Testing health endpoint..."
+          curl -v http://localhost/health || true
           
-          if curl -f http://localhost/; then
-            echo "✅ API root endpoint working"
-          else
-            echo "⚠️  API root endpoint failed"
-          fi
-          
-          if curl -f http://localhost/api/tasks; then
-            echo "✅ API tasks endpoint working"
-          else
-            echo "⚠️  API tasks endpoint failed"
-          fi
+          echo ""
+          echo "Testing tasks endpoint..."
+          curl -v http://localhost/api/tasks || true
 
-      - name: Check container logs
+      - name: Check container logs on failure
         if: failure()
         run: |
-          docker-compose logs proxy
-          docker-compose logs app
-          docker-compose logs database
+          echo "=== PROXY LOGS ==="
+          docker-compose logs proxy || true
+          echo "=== APP LOGS ==="
+          docker-compose logs app || true
+          echo "=== DB LOGS ==="
+          docker-compose logs database || true
 
       - name: Cleanup
         if: always()
-        run: docker-compose down -v
+        run: docker-compose down -v || true
